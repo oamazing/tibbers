@@ -1,4 +1,4 @@
-package tibbers
+package convert
 
 import "reflect"
 

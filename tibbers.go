@@ -1,10 +1,13 @@
 package tibbers
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"reflect"
 	"sync"
+
+	"github.com/oamazing/tibbers/convert"
 )
 
 type Handle func(*Context)
@@ -35,8 +38,18 @@ func (tibbers *Tibbers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx.reset()
 	ctx.Request = r
 	ctx.Writer = w
-	if tree, ok := tibbers.routes[r.Method]; ok {
-		handles := tree.getValue(r.URL.Path)
+	tibbers.handleHttp(ctx)
+	tibbers.pool.Put(ctx)
+}
+
+func (tibbers *Tibbers) handleHttp(ctx *Context) {
+	defer func() {
+		if err := recover(); err != nil {
+			ctx.Data(nil, errors.New(err.(string)))
+		}
+	}()
+	if tree, ok := tibbers.routes[ctx.Request.Method]; ok {
+		handles := tree.getValue(ctx.Request.URL.Path)
 		if len(handles) > 0 {
 			ctx.handles = handles
 			ctx.Next()
@@ -48,31 +61,30 @@ func (tibbers *Tibbers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ctx.Writer.WriteHeader(http.StatusNotFound)
 		ctx.Writer.Write(tibbers.notFound)
 	}
-	tibbers.pool.Put(ctx)
 }
 
 func (tibbers *Tibbers) Run(addr string) error {
 	return http.ListenAndServe(addr, tibbers)
 }
 
-func (tibbers *Tibbers) GET(path string, handle interface{}) {
+func (tibbers *Tibbers) Get(path string, handle interface{}) {
 	tibbers.Handle(http.MethodGet, path, convertHandle(handle))
 }
 
-func (tibbers *Tibbers) POST(path string, handle interface{}) {
+func (tibbers *Tibbers) Post(path string, handle interface{}) {
 	tibbers.Handle(http.MethodPost, path, convertHandle(handle))
 }
 
-func (tibbers *Tibbers) PUT(path string, handle interface{}) {
+func (tibbers *Tibbers) Put(path string, handle interface{}) {
 	tibbers.Handle(http.MethodPut, path, convertHandle(handle))
 }
-func (tibbers *Tibbers) PATCH(path string, handle interface{}) {
+func (tibbers *Tibbers) Patch(path string, handle interface{}) {
 	tibbers.Handle(http.MethodPatch, path, convertHandle(handle))
 }
-func (tibbers *Tibbers) DELETE(path string, handle interface{}) {
+func (tibbers *Tibbers) Delete(path string, handle interface{}) {
 	tibbers.Handle(http.MethodDelete, path, convertHandle(handle))
 }
-func (tibbers *Tibbers) Group(path string) Route {
+func (tibbers *Tibbers) Group(path string) Router {
 	return &Tibbers{
 		basePath: tibbers.basePath + path,
 		routes:   tibbers.routes,
@@ -118,7 +130,7 @@ func convertHandle(h interface{}) Handle {
 		resp := reflect.New(respType)
 		val.Call([]reflect.Value{req, resp})
 		var data interface{}
-		Traverse(resp.Elem(), func(val reflect.Value, field reflect.StructField) bool {
+		convert.Traverse(resp.Elem(), func(val reflect.Value, field reflect.StructField) bool {
 			switch field.Name {
 			case `Error`:
 				if e := val.Interface(); err != nil {

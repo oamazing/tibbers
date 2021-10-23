@@ -13,7 +13,7 @@ type Resp struct {
 
 func main() {
 	app := tibbers.New()
-	app.GET(`/test`, func(
+	app.Get(`/test`, func(
 		req struct {
 			Query struct {
 				Id   int64  `json:"id"`

@@ -4,15 +4,13 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-
-	"github.com/oamazing/tibbers"
 )
 
 func Query(value reflect.Value, map2strs map[string][]string) (err error) {
 	if len(map2strs) == 0 {
 		return nil
 	}
-	tibbers.Traverse(value, func(v reflect.Value, f reflect.StructField) bool {
+	Traverse(value, func(v reflect.Value, f reflect.StructField) bool {
 		paramName, arrayParamName := queryParamName(f)
 		if paramName == "" {
 			return true
